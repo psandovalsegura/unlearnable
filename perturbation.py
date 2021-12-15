@@ -29,9 +29,9 @@ parser.add_argument('--train_batch_size', default=512, type=int, help='perturb s
 parser.add_argument('--eval_batch_size', default=512, type=int, help='perturb step size')
 parser.add_argument('--num_of_workers', default=8, type=int, help='workers for loader')
 parser.add_argument('--train_data_type', type=str, default='CIFAR10')
-parser.add_argument('--train_data_path', type=str, default='../datasets')
+parser.add_argument('--train_data_path', type=str, default='/vulcanscratch/psando/cifar-10')
 parser.add_argument('--test_data_type', type=str, default='CIFAR10')
-parser.add_argument('--test_data_path', type=str, default='../datasets')
+parser.add_argument('--test_data_path', type=str, default='/vulcanscratch/psando/cifar-10')
 # Perturbation Options
 parser.add_argument('--universal_train_portion', default=0.2, type=float)
 parser.add_argument('--universal_stop_error', default=0.5, type=float)

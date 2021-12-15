@@ -7,3 +7,6 @@ test_exp/
 pretrained_checkpoints/
 exp_results.json
 plots/
+
+# Slurm
+*.out

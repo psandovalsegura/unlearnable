@@ -83,7 +83,8 @@ transform_options['PoisonSVHN'] = transform_options['SVHN']
 transform_options['ImageNetMini'] = transform_options['ImageNet']
 transform_options['PoisonImageNetMini'] = transform_options['ImageNet']
 transform_options['CelebAMini'] = transform_options['CelebA']
-
+transform_options['CIFAR20'] = transform_options['CIFAR100']
+transform_options['PoisonCIFAFR20'] = transform_options['CIFAR100']
 
 @mlconfig.register
 class DatasetGenerator():
@@ -123,7 +124,7 @@ class DatasetGenerator():
         if train_data_type == 'CIFAR10':
             num_of_classes = 10
             train_dataset = datasets.CIFAR10(root=train_data_path, train=True,
-                                             download=True, transform=train_transform)
+                                             download=False, transform=train_transform)
         elif train_data_type == 'PoisonCIFAR10':
             num_of_classes = 10
             train_dataset = PoisonCIFAR10(root=train_data_path, transform=train_transform,
@@ -133,10 +134,16 @@ class DatasetGenerator():
                                           add_uniform_noise=add_uniform_noise,
                                           poison_classwise=poison_classwise,
                                           poison_classwise_idx=poison_classwise_idx)
+        elif train_data_type == 'CIFAR20':
+            num_of_classes = 20
+            train_dataset = CIFAR20(root=train_data_path, transform=train_transform, download=False, train=True)
+        elif train_data_type == 'PoisonCIFAR20':
+            num_of_classes = 20
+            train_dataset = CIFAR20(root=train_data_path, transform=train_transform, download=False, train=True)
         elif train_data_type == 'CIFAR100':
             num_of_classes = 100
             train_dataset = datasets.CIFAR100(root=train_data_path, train=True,
-                                              download=True, transform=train_transform)
+                                              download=False, transform=train_transform)
         elif train_data_type == 'PoisonCIFAR100':
             num_of_classes = 100
             train_dataset = PoisonCIFAR100(root=train_data_path, transform=train_transform,
@@ -160,7 +167,7 @@ class DatasetGenerator():
         elif train_data_type == 'SVHN':
             num_of_classes = 10
             train_dataset = datasets.SVHN(root=train_data_path, split='train',
-                                          download=True, transform=train_transform)
+                                          download=False, transform=train_transform)
         elif train_data_type == 'PoisonSVHN':
             num_of_classes = 10
             train_dataset = PoisonSVHN(root=train_data_path, split='train', transform=train_transform,
@@ -204,7 +211,7 @@ class DatasetGenerator():
         # Test Datset
         if test_data_type == 'CIFAR10':
             test_dataset = datasets.CIFAR10(root=test_data_path, train=False,
-                                            download=True, transform=test_transform)
+                                            download=False, transform=test_transform)
         elif test_data_type == 'PoisonCIFAR10':
             test_dataset = PoisonCIFAR10(root=test_data_path, train=False, transform=test_transform,
                                          poison_rate=poison_rate, perturb_type=perturb_type,
@@ -213,10 +220,11 @@ class DatasetGenerator():
                                          add_uniform_noise=add_uniform_noise,
                                          poison_classwise=poison_classwise,
                                          poison_classwise_idx=poison_classwise_idx)
-
+        elif test_data_type == 'CIFAR20':
+            test_dataset = CIFAR20(root=test_data_path, transform=test_transform, download=False, train=False)
         elif test_data_type == 'CIFAR100':
             test_dataset = datasets.CIFAR100(root=test_data_path, train=False,
-                                             download=True, transform=test_transform)
+                                             download=False, transform=test_transform)
         elif test_data_type == 'PoisonCIFAR100':
             test_dataset = PoisonCIFAR100(root=test_data_path, train=False, transform=test_transform,
                                           poison_rate=poison_rate, perturb_type=perturb_type,
@@ -230,7 +238,7 @@ class DatasetGenerator():
                                           poisn_cifar10_data=poison_cifar10)
         elif test_data_type == 'SVHN':
             test_dataset = datasets.SVHN(root=test_data_path, split='test',
-                                         download=True, transform=test_transform)
+                                         download=False, transform=test_transform)
         elif test_data_type == 'PoisonSVHN':
             test_dataset = PoisonSVHN(root=test_data_path, split='test', transform=test_transform,
                                        poison_rate=poison_rate, perturb_type=perturb_type,
@@ -438,6 +446,51 @@ class PoisonCIFAR10(datasets.CIFAR10):
         print('Poison samples: %d/%d' % (len(self.poison_samples), len(self)))
 
 
+class CIFAR20(datasets.CIFAR100):
+    """Sub-class CIFAR100 to return image ids with images.
+       CIFAR20 is CIFAR100 but with 20 classes, where each
+       label is a superclass.
+    """
+
+    def __init__(self, root, train=True, transform=None, target_transform=None, download=False):
+        super().__init__(root, train, transform, target_transform, download)
+
+        # update labels
+        coarse_labels = np.array([ 4,  1, 14,  8,  0,  6,  7,  7, 18,  3,
+                                   3, 14,  9, 18,  7, 11,  3,  9,  7, 11,
+                                   6, 11,  5, 10,  7,  6, 13, 15,  3, 15, 
+                                   0, 11,  1, 10, 12, 14, 16,  9, 11,  5,
+                                   5, 19,  8,  8, 15, 13, 14, 17, 18, 10,
+                                   16, 4, 17,  4,  2,  0, 17,  4, 18, 17,
+                                   10, 3,  2, 12, 12, 16, 12,  1,  9, 19, 
+                                   2, 10,  0,  1, 16, 12,  9, 13, 15, 13,
+                                  16, 19,  2,  4,  6, 19,  5,  5,  8, 19,
+                                  18,  1,  2, 15,  6,  0, 17,  8, 14, 13])
+        self.targets = coarse_labels[self.targets]
+
+        # update classes
+        self.classes = [['beaver', 'dolphin', 'otter', 'seal', 'whale'],
+                        ['aquarium_fish', 'flatfish', 'ray', 'shark', 'trout'],
+                        ['orchid', 'poppy', 'rose', 'sunflower', 'tulip'],
+                        ['bottle', 'bowl', 'can', 'cup', 'plate'],
+                        ['apple', 'mushroom', 'orange', 'pear', 'sweet_pepper'],
+                        ['clock', 'keyboard', 'lamp', 'telephone', 'television'],
+                        ['bed', 'chair', 'couch', 'table', 'wardrobe'],
+                        ['bee', 'beetle', 'butterfly', 'caterpillar', 'cockroach'],
+                        ['bear', 'leopard', 'lion', 'tiger', 'wolf'],
+                        ['bridge', 'castle', 'house', 'road', 'skyscraper'],
+                        ['cloud', 'forest', 'mountain', 'plain', 'sea'],
+                        ['camel', 'cattle', 'chimpanzee', 'elephant', 'kangaroo'],
+                        ['fox', 'porcupine', 'possum', 'raccoon', 'skunk'],
+                        ['crab', 'lobster', 'snail', 'spider', 'worm'],
+                        ['baby', 'boy', 'girl', 'man', 'woman'],
+                        ['crocodile', 'dinosaur', 'lizard', 'snake', 'turtle'],
+                        ['hamster', 'mouse', 'rabbit', 'shrew', 'squirrel'],
+                        ['maple_tree', 'oak_tree', 'palm_tree', 'pine_tree', 'willow_tree'],
+                        ['bicycle', 'bus', 'motorcycle', 'pickup_truck', 'train'],
+                        ['lawn_mower', 'rocket', 'streetcar', 'tank', 'tractor']]
+
+
 class PoisonCIFAR100(datasets.CIFAR100):
     def __init__(self, root, train=True, transform=None, target_transform=None,
                  download=False, poison_rate=1.0, perturb_tensor_filepath=None,
@@ -500,12 +553,12 @@ class PoisonCIFAR101(datasets.VisionDataset):
         self.transform = transform
         self.root = root
         if split == 'poison_train':
-            self.clean_cifar100 = datasets.CIFAR100(root=root, train=True, download=True, transform=None)
+            self.clean_cifar100 = datasets.CIFAR100(root=root, train=True, download=False, transform=None)
             cifar10 = poisn_cifar10_data
             cifar10_sample_count = 500
         elif split == 'test':
-            self.clean_cifar100 = datasets.CIFAR100(root=root, train=False, download=True, transform=None)
-            cifar10 = datasets.CIFAR10(root=root, train=False, download=True, transform=None)
+            self.clean_cifar100 = datasets.CIFAR100(root=root, train=False, download=False, transform=None)
+            cifar10 = datasets.CIFAR10(root=root, train=False, download=False, transform=None)
             cifar10_sample_count = 100
 
         self.data, self.targets = self.clean_cifar100.data, self.clean_cifar100.targets
