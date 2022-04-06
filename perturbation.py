@@ -11,6 +11,7 @@ import torch
 import util
 import madrys
 import numpy as np
+import torch.nn as nn
 from evaluator import Evaluator
 from tqdm import tqdm
 from trainer import Trainer
@@ -46,6 +47,8 @@ parser.add_argument('--epsilon', default=8, type=float, help='perturbation')
 parser.add_argument('--num_steps', default=1, type=int, help='perturb number of steps')
 parser.add_argument('--step_size', default=0.8, type=float, help='perturb step size')
 parser.add_argument('--random_start', action='store_true', default=False)
+parser.add_argument('--disable_tqdm', action='store_true', default=False)
+parser.add_argument('--num_models', default=1, type=int, help='number of models in ensemble')
 args = parser.parse_args()
 
 # Convert Eps
@@ -186,7 +189,7 @@ def universal_perturbation(noise_generator, trainer, evaluator, model, criterion
                     param.requires_grad = True
                 trainer.train_batch(torch.stack(train_imgs).to(device), labels, model, optimizer)
 
-        for i, (images, labels) in tqdm(enumerate(data_loader[args.universal_train_target]), total=len(data_loader[args.universal_train_target])):
+        for i, (images, labels) in tqdm(enumerate(data_loader[args.universal_train_target]), total=len(data_loader[args.universal_train_target]), disable=args.disable_tqdm):
             images, labels, model = images.to(device), labels.to(device), model.to(device)
             # Add Class-wise Noise to each sample
             batch_noise, mask_cord_list = [], []
@@ -391,6 +394,36 @@ def sample_wise_perturbation(noise_generator, trainer, evaluator, model, criteri
     else:
         return random_noise
 
+class ModelEnsemble(nn.Module):
+    def __init__(self, models):
+        """
+        Behaves like a standard nn.Module, but has a next() method that
+        iterates through a list of models. The index idx determines
+        which model is active.
+        """
+        super(ModelEnsemble, self).__init__()
+        self.models = nn.ModuleList(models)
+        self.num_models = len(models)
+        # self.idx = 0
+    
+    # def train(self):
+    #     self.models[self.idx].train()
+
+    # def eval(self):
+    #     self.models[self.idx].eval()
+    
+    def forward(self, x):
+        output = []
+        for m in self.models:
+            output.append(m(x))
+        return torch.mean(torch.stack(output), dim=0)
+
+    # def parameters(self):
+    #     return self.models[self.idx].parameters()
+
+    # def next(self):
+    #     print(f'ModelEnsemble idx: {self.idx}')
+    #     self.idx = (self.idx + 1) % self.num_models
 
 def main():
     # Setup ENV
@@ -403,7 +436,14 @@ def main():
                                                   num_of_workers=args.num_of_workers,
                                                   seed=args.seed)
     data_loader = datasets_generator.getDataLoader()
-    model = config.model().to(device)
+
+    if args.num_models > 1:
+        models_list = []
+        for i in range(args.num_models):
+            models_list.append(config.model().to(device))
+        model = ModelEnsemble(models_list)
+    else:
+        model = config.model().to(device)
     logger.info("param size = %fMB", util.count_parameters_in_MB(model))
     optimizer = config.optimizer(model.parameters())
     scheduler = config.scheduler(optimizer)
