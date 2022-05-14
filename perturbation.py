@@ -45,12 +45,15 @@ parser.add_argument('--noise_shape', default=[10, 3, 32, 32], nargs='+', type=in
 parser.add_argument('--epsilon', default=8, type=float, help='perturbation')
 parser.add_argument('--num_steps', default=1, type=int, help='perturb number of steps')
 parser.add_argument('--step_size', default=0.8, type=float, help='perturb step size')
+parser.add_argument('--p_norm', default=0, type=int, help='p norm')
 parser.add_argument('--random_start', action='store_true', default=False)
 args = parser.parse_args()
 
 # Convert Eps
-args.epsilon = args.epsilon / 255
-args.step_size = args.step_size / 255
+if args.p_norm == 0:
+    args.p_norm = np.inf
+    args.epsilon = args.epsilon / 255
+    args.step_size = args.step_size / 255
 
 # Set up Experiments
 if args.exp_name == '':
@@ -445,7 +448,8 @@ def main():
 
     noise_generator = toolbox.PerturbationTool(epsilon=args.epsilon,
                                                num_steps=args.num_steps,
-                                               step_size=args.step_size)
+                                               step_size=args.step_size,
+                                               p_norm=args.p_norm)
 
     if args.attack_type == 'random':
         noise = noise_generator.random_noise(noise_shape=args.noise_shape)

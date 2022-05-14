@@ -9,10 +9,11 @@ else:
 
 
 class PerturbationTool():
-    def __init__(self, seed=0, epsilon=0.03137254901, num_steps=20, step_size=0.00784313725):
+    def __init__(self, seed=0, epsilon=0.03137254901, num_steps=20, step_size=0.00784313725, p_norm=np.inf):
         self.epsilon = epsilon
         self.num_steps = num_steps
         self.step_size = step_size
+        self.p_norm = p_norm
         self.seed = seed
         np.random.seed(seed)
 
@@ -40,9 +41,16 @@ class PerturbationTool():
                 logits, loss = criterion(model, perturb_img, labels, optimizer)
             perturb_img.retain_grad()
             loss.backward()
-            eta = self.step_size * perturb_img.grad.data.sign() * (-1)
-            perturb_img = Variable(perturb_img.data + eta, requires_grad=True)
-            eta = torch.clamp(perturb_img.data - images.data, -self.epsilon, self.epsilon)
+            if self.p_norm == np.inf:
+                eta = self.step_size * perturb_img.grad.data.sign() * (-1)
+                perturb_img = Variable(perturb_img.data + eta, requires_grad=True)
+                eta = torch.clamp(perturb_img.data - images.data, -self.epsilon, self.epsilon)
+            elif self.p_norm == 2:
+                eta = self.step_size * perturb_img.grad.data.sign() * (-1) #batch_multiply(self.step_size, normalize_by_pnorm(perturb_img.grad.data, p=2))
+                perturb_img = Variable(perturb_img.data + eta, requires_grad=True)
+                eta = clamp_by_pnorm((perturb_img.data - images.data), 2, self.epsilon) 
+            else:
+                raise ValueError(f'Norm of {self.p_norm} not supported')
             perturb_img = Variable(images.data + eta, requires_grad=True)
             perturb_img = Variable(torch.clamp(perturb_img, 0, 1), requires_grad=True)
 
@@ -97,3 +105,51 @@ class PerturbationTool():
         else:
             mask[:, x1: x2, y1: y2] = noise.cpu().numpy()
         return ((x1, x2, y1, y2), torch.from_numpy(mask).to(device))
+
+def normalize_by_pnorm(x, p=2, small_constant=1e-6):
+    """
+    Normalize gradients for gradient (not gradient sign) attacks.
+    :param x: tensor containing the gradients on the input.
+    :param p: (optional) order of the norm for the normalization (1 or 2).
+    :param small_constant: (optional float) to avoid dividing by zero.
+    :return: normalized gradients.
+    """
+    # loss is averaged over the batch so need to multiply the batch
+    # size to find the actual gradient of each input sample
+
+    assert isinstance(p, float) or isinstance(p, int)
+    norm = _get_norm_batch(x, p)
+    norm = torch.max(norm, torch.ones_like(norm) * small_constant)
+    return batch_multiply(1. / norm, x)
+
+def _get_norm_batch(x, p):
+    batch_size = x.size(0)
+    return x.abs().pow(p).view(batch_size, -1).sum(dim=1).pow(1. / p)
+
+def batch_multiply(float_or_vector, tensor):
+    if isinstance(float_or_vector, torch.Tensor):
+        assert len(float_or_vector) == len(tensor)
+        tensor = _batch_multiply_tensor_by_vector(float_or_vector, tensor)
+    elif isinstance(float_or_vector, float):
+        tensor *= float_or_vector
+    else:
+        raise TypeError("Value has to be float or torch.Tensor")
+    return tensor
+
+def _batch_multiply_tensor_by_vector(vector, batch_tensor):
+    """Equivalent to the following
+    for ii in range(len(vector)):
+        batch_tensor.data[ii] *= vector[ii]
+    return batch_tensor
+    """
+    return (batch_tensor.transpose(0, -1) * vector).transpose(0, -1).contiguous()
+
+def clamp_by_pnorm(x, p, r):
+    assert isinstance(p, float) or isinstance(p, int)
+    norm = _get_norm_batch(x, p)
+    if isinstance(r, torch.Tensor):
+        assert norm.size() == r.size()
+    else:
+        assert isinstance(r, float)
+    factor = torch.min(r / norm, torch.ones_like(norm))
+    return batch_multiply(factor, x)
